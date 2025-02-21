@@ -26,6 +26,7 @@ enum AppMode {
     Menu,
     Create,
     Sign,
+    GetAddress,
 }
 
 #[derive(Debug, Default)]
@@ -44,11 +45,18 @@ struct SignState {
     selected_field: usize,
 }
 
+#[derive(Debug, Default)]
+struct GetAddressState {
+    participant_index: u8,
+    selected_field: usize,
+}
+
 #[derive(Debug)]
 pub struct App {
     mode: AppMode,
     create_state: CreateState,
     sign_state: SignState,
+    get_address_state: GetAddressState,
     exit: bool,
     last_blink: Instant,
 }
@@ -59,6 +67,7 @@ impl Default for App {
             mode: AppMode::Menu,
             create_state: CreateState::default(),
             sign_state: SignState::default(),
+            get_address_state: GetAddressState::default(),
             exit: false,
             last_blink: Instant::now(),
         }
@@ -98,6 +107,7 @@ impl App {
             AppMode::Menu => self.render_menu(frame),
             AppMode::Create => self.render_create(frame),
             AppMode::Sign => self.render_sign(frame),
+            AppMode::GetAddress => self.render_get_address(frame),
         }
     }
 
@@ -115,7 +125,7 @@ impl App {
             ])
             .split(main_block.inner(frame.area()));
 
-        let menu_items = vec!["Create Multisig", "Sign Multisig"];
+        let menu_items = vec!["Create Multisig", "Sign Multisig", "Get Address"];
         let mut text = Text::default();
         for (i, item) in menu_items.iter().enumerate() {
             let style = if i == self.create_state.selected_field {
@@ -294,6 +304,63 @@ impl App {
         frame.render_widget(main_block, frame.area());
     }
 
+    fn render_get_address(&mut self, frame: &mut Frame) {
+        let main_block = Block::bordered()
+            .title(" BoomerSig (Get Address)".bold())
+            .border_set(border::THICK);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(3),
+                Constraint::Length(3),
+            ])
+            .split(main_block.inner(frame.area()));
+
+        let is_participant_selected = self.get_address_state.selected_field == 0;
+        let mut participant_text = self.get_address_state.participant_index.to_string();
+        if is_participant_selected && self.create_state.cursor_visible {
+            participant_text.push('_');
+        }
+
+        let participant_style = if is_participant_selected {
+            Style::default().blue().bold()
+        } else {
+            Style::default()
+        };
+
+        frame.render_widget(
+            Paragraph::new(participant_text)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Participant Index"),
+                )
+                .style(participant_style),
+            chunks[0],
+        );
+
+        let instructions = Line::from(vec![
+            " Navigate ".into(),
+            "▲/▼".blue().bold(),
+            " Edit ".into(),
+            "Enter".blue().bold(),
+            " Back ".into(),
+            "Esc".blue().bold(),
+            " Quit ".into(),
+            "Q".blue().bold(),
+        ]);
+        frame.render_widget(
+            Paragraph::new(Text::from(instructions))
+                .block(Block::default())
+                .centered(),
+            chunks[2],
+        );
+
+        frame.render_widget(main_block, frame.area());
+    }
+
     fn handle_key_event(&mut self, key_event: crossterm::event::KeyEvent) {
         if key_event.code == crossterm::event::KeyCode::Char('q') && self.mode != AppMode::Sign {
             self.exit();
@@ -304,6 +371,7 @@ impl App {
             AppMode::Menu => self.handle_menu_input(key_event),
             AppMode::Create => self.handle_create_input(key_event),
             AppMode::Sign => self.handle_sign_input(key_event),
+            AppMode::GetAddress => self.handle_get_address_input(key_event),
         }
     }
 
@@ -428,6 +496,55 @@ impl App {
                     }
                 } else {
                     self.sign_state.psbt.input(key_event);
+                }
+            }
+        }
+    }
+
+    fn handle_get_address_input(&mut self, key_event: crossterm::event::KeyEvent) {
+        match key_event.code {
+            crossterm::event::KeyCode::Esc => self.mode = AppMode::Menu,
+            crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Down => {
+                self.get_address_state.selected_field =
+                    (self.get_address_state.selected_field + 1) % 2;
+            }
+            crossterm::event::KeyCode::Enter => {
+                if self.get_address_state.selected_field == 1 {
+                    let data_to_sign = "get address".to_string();
+                    let config = SigningConfig {
+                        room: "default-signing".into(),
+                        address: "http://127.0.0.1:8000".parse().unwrap(),
+                        parties: vec![1, 2],
+                        transaction: false,
+                        local_share: format!(
+                            "local-share{}.json",
+                            self.get_address_state.participant_index
+                        )
+                        .into(),
+                        data_to_sign,
+                    };
+
+                    let _rt = tokio::runtime::Runtime::new().unwrap();
+                    let ret = _rt.block_on(do_sign(config)).unwrap();
+
+                    std::fs::write("address.raw", format!("{:?}", ret)).unwrap();
+                }
+            }
+            _ => {
+                if self.get_address_state.selected_field == 0 {
+                    match key_event.code {
+                        crossterm::event::KeyCode::Left => {
+                            self.get_address_state.participant_index =
+                                self.get_address_state.participant_index.saturating_sub(1)
+                        }
+                        crossterm::event::KeyCode::Right => {
+                            self.get_address_state.participant_index =
+                                self.get_address_state.participant_index.saturating_add(1)
+                        }
+                        _ => {}
+                    }
+                } else {
+                    //self.get_address_state.psbt.input(key_event);
                 }
             }
         }

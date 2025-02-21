@@ -28,6 +28,7 @@ use openssl::bn::BigNum;
 
 use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1};
 
+#[derive(Clone)]
 pub struct SigningConfig {
     pub address: surf::Url,
     pub room: String,
@@ -75,21 +76,14 @@ pub async fn do_sign(args: SigningConfig) -> Result<SigningResult> {
     tokio::pin!(incoming);
     tokio::pin!(outgoing);
 
-    let mut tx: PartiallySignedTransaction;
-
     let data = match args.transaction {
         true => {
-            tx = PartiallySignedTransaction::from_str(args.data_to_sign.as_str()).unwrap();
+            let tx = PartiallySignedTransaction::from_str(args.data_to_sign.as_str()).unwrap();
             let mut sighash_cache = sighash::SighashCache::new(tx.clone().extract_tx());
             let sighash_ecdsa = tx.sighash_ecdsa(0, &mut sighash_cache).unwrap();
             hex::decode(sighash_ecdsa.0.to_string()).unwrap()
         }
-        false => {
-            let _tx: Transaction =
-                deserialize(&Vec::from_hex("010000000000ffffffff").unwrap()).unwrap();
-            tx = PartiallySignedTransaction::from_unsigned_tx(_tx).unwrap();
-            args.data_to_sign.as_bytes().to_vec()
-        }
+        false => args.data_to_sign.as_bytes().to_vec(),
     };
 
     let (signing, partial_signature) =
@@ -147,6 +141,7 @@ pub async fn do_sign(args: SigningConfig) -> Result<SigningResult> {
         v.extend_from_slice(&public_key.serialize_vec(&secp, false))
             .unwrap();
         script_sig.push_slice(&v);
+        let mut tx = PartiallySignedTransaction::from_str(args.data_to_sign.as_str()).unwrap();
         tx.inputs[0].final_script_sig = Some(script_sig);
 
         let tx = tx.extract_tx();

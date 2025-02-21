@@ -53,20 +53,41 @@ pub async fn do_keygen(config: KeygenConfig) -> Result<KeygenResult> {
         .await
         .context("save output to file")?;
 
-    let args = SigningConfig {
-        room: "default-signing".into(),
-        address: "http://127.0.0.1:8000".parse()?,
-        parties: vec![1, 2],
-        local_share: config.output,
-        data_to_sign: "boomersig go brrrr".into(),
-        transaction: false,
-    };
+    return Ok(KeygenResult {
+        pubkey: Default::default(),
+        address: Default::default(),
+        out_dir: Default::default(),
+    });
 
-    let res = do_sign(args).await?;
+    // if config.index == 3 {
+    //     return Err(anyhow!("erro"));
+    // }
+    // let args = SigningConfig {
+    //     room: "default-signing".into(),
+    //     address: "http://127.0.0.1:8000".parse()?,
+    //     parties: vec![1, 2],
+    //     local_share: config.output,
+    //     data_to_sign: "boomersig go brrrr".into(),
+    //     transaction: false,
+    // };
+    // tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+    // let mut counter = 0;
+    // let res = loop {
+    //     match do_sign(args.clone()).await {
+    //         Ok(res) => break res,
+    //         Err(e) => {
+    //             if counter > 10 {
+    //                 return Err(e);
+    //             }
+    //             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    //             counter += 1;
+    //         },
+    //     }
+    // };
 
-    Ok(KeygenResult {
-        pubkey: res.pubkey,
-        address: res.address,
-        out_dir: res.out_dir,
-    })
+    // Ok(KeygenResult {
+    //     pubkey: res.pubkey,
+    //     address: res.address,
+    //     out_dir: res.out_dir,
+    // })
 }
