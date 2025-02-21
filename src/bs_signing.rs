@@ -2,16 +2,16 @@ use std::path::PathBuf;
 
 use anyhow::Ok;
 use anyhow::{anyhow, Context, Result};
-use bitcoin::consensus::encode::{serialize_hex, deserialize};
+use bitcoin::consensus::encode::{deserialize, serialize_hex};
 use bitcoin::psbt::PartiallySignedTransaction;
 use bitcoin::script::PushBytesBuf;
 use bitcoin::sighash;
 use bitcoin::ScriptBuf;
 use bitcoin::Transaction;
 use futures::{SinkExt, StreamExt, TryStreamExt};
-use structopt::StructOpt;
-use std::str::FromStr;
 use hex::FromHex;
+use std::str::FromStr;
+use structopt::StructOpt;
 
 use curv::arithmetic::Converter;
 use curv::BigInt;
@@ -22,37 +22,34 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::sig
 use round_based::async_runtime::AsyncProtocol;
 use round_based::Msg;
 
-mod bs_client;
-use bs_client::join_computation;
+use crate::bs_client::join_computation;
 
 use openssl::bn::BigNum;
 
 use secp256k1::{Message, RecoverableSignature, RecoveryId, Secp256k1};
 
-#[derive(Debug, StructOpt)]
-struct Cli {
-    #[structopt(short, long, default_value = "http://localhost:8000/")]
-    address: surf::Url,
-    #[structopt(short, long, default_value = "default-signing")]
-    room: String,
-    #[structopt(short, long)]
-    local_share: PathBuf,
-
-    #[structopt(short, long, use_delimiter(true))]
-    parties: Vec<u16>,
-    #[structopt(short, long)]
-    data_to_sign: String,
-
-    #[structopt(short, long)]
-    transaction: bool,
+pub struct SigningConfig {
+    pub address: surf::Url,
+    pub room: String,
+    pub local_share: PathBuf,
+    pub parties: Vec<u16>,
+    pub data_to_sign: String,
+    pub transaction: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let args: Cli = Cli::from_args();
-    let local_share = tokio::fs::read(args.local_share)
+#[derive(Debug)]
+pub struct SigningResult {
+    pub pubkey: String,
+    pub address: String,
+    pub out_dir: PathBuf,
+    pub signined_tx: Option<String>,
+}
+
+pub async fn do_sign(args: SigningConfig) -> Result<SigningResult> {
+    let local_share = tokio::fs::read(args.local_share.clone())
         .await
         .context("cannot read local share")?;
+
     let local_share = serde_json::from_slice(&local_share).context("parse local share")?;
     let number_of_parties = args.parties.len();
 
@@ -88,7 +85,8 @@ async fn main() -> Result<()> {
             hex::decode(sighash_ecdsa.0.to_string()).unwrap()
         }
         false => {
-            let _tx: Transaction = deserialize(&Vec::from_hex("010000000000ffffffff").unwrap()).unwrap();
+            let _tx: Transaction =
+                deserialize(&Vec::from_hex("010000000000ffffffff").unwrap()).unwrap();
             tx = PartiallySignedTransaction::from_unsigned_tx(_tx).unwrap();
             args.data_to_sign.as_bytes().to_vec()
         }
@@ -110,6 +108,7 @@ async fn main() -> Result<()> {
         .map_ok(|msg| msg.body)
         .try_collect()
         .await?;
+
     let signature = signing
         .complete(&partial_signatures)
         .context("online stage failed")?;
@@ -145,16 +144,33 @@ async fn main() -> Result<()> {
         script_sig.push_slice(&v);
 
         let mut v = PushBytesBuf::new();
-        v.extend_from_slice(&public_key.serialize_vec(&secp, false)).unwrap();
+        v.extend_from_slice(&public_key.serialize_vec(&secp, false))
+            .unwrap();
         script_sig.push_slice(&v);
         tx.inputs[0].final_script_sig = Some(script_sig);
 
         let tx = tx.extract_tx();
-        println!("{}", serialize_hex(&tx));
+
+        let public_key =
+            bitcoin::PublicKey::from_slice(&hex::decode(&public_key_hex).unwrap()).unwrap();
+        let address = bitcoin::Address::p2pkh(&public_key, bitcoin::Network::Signet);
+
+        return Ok(SigningResult {
+            pubkey: public_key_hex,
+            address: address.to_string(),
+            out_dir: args.local_share,
+            signined_tx: Some(serialize_hex(&tx)),
+        });
     }
+
     let public_key =
-    bitcoin::PublicKey::from_slice(&hex::decode(&public_key_hex).unwrap()).unwrap();
+        bitcoin::PublicKey::from_slice(&hex::decode(&public_key_hex).unwrap()).unwrap();
     let address = bitcoin::Address::p2pkh(&public_key, bitcoin::Network::Signet);
-    println!("address: {}", address);
-    Ok(())
+
+    Ok(SigningResult {
+        pubkey: public_key_hex,
+        address: address.to_string(),
+        out_dir: args.local_share,
+        signined_tx: None,
+    })
 }

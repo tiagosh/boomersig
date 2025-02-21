@@ -1,4 +1,10 @@
+use bs_signing::{do_sign, SigningConfig};
 use crossterm::event::{self, Event};
+mod bs_client;
+mod bs_keygen;
+mod bs_signing;
+
+use futures::executor::block_on;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     prelude::Widget,
@@ -9,7 +15,7 @@ use ratatui::{
     Frame,
 };
 use std::{
-    io,
+    fs, io,
     time::{Duration, Instant},
 };
 use tui_textarea::TextArea;
@@ -288,7 +294,7 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: crossterm::event::KeyEvent) {
-        if key_event.code == crossterm::event::KeyCode::Char('q') {
+        if key_event.code == crossterm::event::KeyCode::Char('q') && self.mode != AppMode::Sign {
             self.exit();
             return;
         }
@@ -363,7 +369,19 @@ impl App {
             }
             crossterm::event::KeyCode::Enter => {
                 if self.sign_state.selected_field == 1 {
-                    self.sign_state.psbt.input(key_event);
+                    let data_to_sign = self.sign_state.psbt.lines().join("\n");
+                    let config = SigningConfig {
+                        room: "room".into(),
+                        address: "http://127.0.0.1:8000".parse().unwrap(),
+                        parties: vec![1, 2, 3],
+                        transaction: true,
+                        local_share: "local_share".into(),
+                        data_to_sign,
+                    };
+                    self.sign_state.psbt = TextArea::new(Vec::new());
+                    
+                    let ret = block_on(async move { do_sign(config).await });
+                    std::fs::write("output.raw", format!("{:?}", ret)).unwrap();
                 }
             }
             _ => {
@@ -392,27 +410,32 @@ impl App {
 }
 
 fn main() -> io::Result<()> {
-    crossterm::execute!(
-        std::io::stdout(),
-        crossterm::terminal::EnterAlternateScreen,
-        crossterm::event::EnableMouseCapture
-    )?;
-    let mut terminal =
-        ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
-    crossterm::terminal::enable_raw_mode()?;
+    let _rt = tokio::runtime::Runtime::new().unwrap();
 
-    let mut app = App::default();
-    app.sign_state
-        .psbt
-        .set_placeholder_text("Enter PSBT here...");
-    let res = app.run(&mut terminal);
+    _rt.spawn_blocking(|| {
+        crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::EnterAlternateScreen,
+            crossterm::event::EnableMouseCapture
+        )?;
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
+        crossterm::terminal::enable_raw_mode()?;
 
-    crossterm::terminal::disable_raw_mode()?;
-    crossterm::execute!(
-        std::io::stdout(),
-        crossterm::terminal::LeaveAlternateScreen,
-        crossterm::event::DisableMouseCapture
-    )?;
+        let mut app = App::default();
+        app.sign_state
+            .psbt
+            .set_placeholder_text("Enter PSBT here...");
+        let res = app.run(&mut terminal);
 
-    res
+        crossterm::terminal::disable_raw_mode()?;
+        crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::event::DisableMouseCapture
+        )?;
+        res
+    });
+
+    Ok(())
 }

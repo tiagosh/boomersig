@@ -1,42 +1,40 @@
 use anyhow::{anyhow, Context, Result};
 use futures::StreamExt;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::Keygen;
 use round_based::async_runtime::AsyncProtocol;
 
-mod bs_client;
-use bs_client::join_computation;
+use crate::{
+    bs_client::join_computation,
+    bs_signing::{do_sign, SigningConfig},
+};
 
-#[derive(Debug, StructOpt)]
-struct Cli {
-    #[structopt(short, long, default_value = "http://localhost:8000/")]
+struct KeygenConfig {
     address: surf::Url,
-    #[structopt(short, long, default_value = "default-keygen")]
     room: String,
-    #[structopt(short, long)]
     output: PathBuf,
 
-    #[structopt(short, long)]
     index: u16,
-    #[structopt(short, long)]
     threshold: u16,
-    #[structopt(short, long)]
     number_of_parties: u16,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let args: Cli = Cli::from_args();
+struct KeygenResult {
+    pubkey: String,
+    address: String,
+    out_dir: PathBuf,
+}
+
+async fn do_keygen(config: KeygenConfig) -> Result<KeygenResult> {
     let mut output_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(args.output)
+        .open(config.output)
         .await
         .context("cannot create output file")?;
 
-    let (_i, incoming, outgoing) = join_computation(args.address, &args.room)
+    let (_i, incoming, outgoing) = join_computation(config.address, &config.room)
         .await
         .context("join computation")?;
 
@@ -44,15 +42,31 @@ async fn main() -> Result<()> {
     tokio::pin!(incoming);
     tokio::pin!(outgoing);
 
-    let keygen = Keygen::new(args.index, args.threshold, args.number_of_parties)?;
+    let keygen = Keygen::new(config.index, config.threshold, config.number_of_parties)?;
     let output = AsyncProtocol::new(keygen, incoming, outgoing)
         .run()
         .await
         .map_err(|e| anyhow!("protocol execution terminated with error: {}", e))?;
+
     let output = serde_json::to_vec_pretty(&output).context("serialize output")?;
     tokio::io::copy(&mut output.as_slice(), &mut output_file)
         .await
         .context("save output to file")?;
 
-    Ok(())
+    let args = SigningConfig {
+        room: "room".into(),
+        address: "http://127.0.0.1:8000".parse()?,
+        parties: vec![1, 2],
+        local_share: "local_share".into(),
+        data_to_sign: "boomersig go brrrr".into(),
+        transaction: false,
+    };
+
+    let res = do_sign(args).await?;
+
+    Ok(KeygenResult {
+        pubkey: res.pubkey,
+        address: res.address,
+        out_dir: res.out_dir,
+    })
 }

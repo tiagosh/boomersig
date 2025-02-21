@@ -3,6 +3,10 @@ name = "boomersig"
 version = "0.0.1"
 edition = "2018"
 
+[[bin]]
+name = "boomersig"
+path = "src/bs_ui.rs"
+
 [dependencies]
 color-eyre = "0.6.3"
 crossterm = "0.28.1"
