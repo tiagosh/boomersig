@@ -3,20 +3,6 @@ name = "boomersig"
 version = "0.0.1"
 edition = "2018"
 
-[[bin]]
-name = "bs_server"
-path = "bin/bs_server.rs"
-
-
-[[bin]]
-name = "bs_signing"
-path = "src/bs_signing.rs"
-
-
-[[bin]]
-name = "bs_keygen"
-path = "src/bs_keygen.rs"
-
 [dependencies]
 color-eyre = "0.6.3"
 crossterm = "0.28.1"
