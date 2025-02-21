@@ -1,3 +1,4 @@
+use bs_keygen::KeygenConfig;
 use bs_signing::{do_sign, SigningConfig};
 use crossterm::event::{self, Event};
 mod bs_client;
@@ -357,6 +358,22 @@ impl App {
                 }
                 _ => {}
             },
+            crossterm::event::KeyCode::Enter => {
+                let config = KeygenConfig {
+                    output: format!("local-share{}.json", self.create_state.participant_index)
+                        .into(),
+                    address: "http://127.0.0.1:8000".parse().unwrap(),
+                    room: "room".into(),
+                    index: self.sign_state.participant_index as u16,
+                    threshold: self.create_state.threshold as u16,
+                    number_of_parties: 3,
+                };
+
+                let _rt = tokio::runtime::Runtime::new().unwrap();
+                let ret = block_on(bs_keygen::do_keygen(config)).unwrap();
+
+                std::fs::write("ms.json", format!("{ret:?}")).unwrap();
+            }
             _ => {}
         }
     }
@@ -373,14 +390,17 @@ impl App {
                     let config = SigningConfig {
                         room: "room".into(),
                         address: "http://127.0.0.1:8000".parse().unwrap(),
-                        parties: vec![1, 2, 3],
+                        parties: vec![1, 2],
                         transaction: true,
-                        local_share: "local_share".into(),
+                        local_share: format!("local-share{}.json", self.sign_state.participant_index)
+                            .into(),
                         data_to_sign,
                     };
                     self.sign_state.psbt = TextArea::new(Vec::new());
                     
-                    let ret = block_on(async move { do_sign(config).await });
+                    let _rt = tokio::runtime::Runtime::new().unwrap();
+                    let ret = _rt.block_on(do_sign(config)).unwrap();
+
                     std::fs::write("output.raw", format!("{:?}", ret)).unwrap();
                 }
             }
@@ -412,30 +432,26 @@ impl App {
 fn main() -> io::Result<()> {
     let _rt = tokio::runtime::Runtime::new().unwrap();
 
-    _rt.spawn_blocking(|| {
-        crossterm::execute!(
-            std::io::stdout(),
-            crossterm::terminal::EnterAlternateScreen,
-            crossterm::event::EnableMouseCapture
-        )?;
-        let mut terminal =
-            ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
-        crossterm::terminal::enable_raw_mode()?;
+    crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture
+    )?;
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
+    crossterm::terminal::enable_raw_mode()?;
 
-        let mut app = App::default();
-        app.sign_state
-            .psbt
-            .set_placeholder_text("Enter PSBT here...");
-        let res = app.run(&mut terminal);
+    let mut app = App::default();
+    app.sign_state
+        .psbt
+        .set_placeholder_text("Enter PSBT here...");
+    let res = app.run(&mut terminal);
 
-        crossterm::terminal::disable_raw_mode()?;
-        crossterm::execute!(
-            std::io::stdout(),
-            crossterm::terminal::LeaveAlternateScreen,
-            crossterm::event::DisableMouseCapture
-        )?;
-        res
-    });
-
+    crossterm::terminal::disable_raw_mode()?;
+    crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::LeaveAlternateScreen,
+        crossterm::event::DisableMouseCapture
+    )?;
     Ok(())
 }

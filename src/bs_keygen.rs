@@ -10,27 +10,28 @@ use crate::{
     bs_signing::{do_sign, SigningConfig},
 };
 
-struct KeygenConfig {
-    address: surf::Url,
-    room: String,
-    output: PathBuf,
+pub struct KeygenConfig {
+    pub address: surf::Url,
+    pub room: String,
+    pub output: PathBuf,
 
-    index: u16,
-    threshold: u16,
-    number_of_parties: u16,
+    pub index: u16,
+    pub threshold: u16,
+    pub number_of_parties: u16,
 }
 
-struct KeygenResult {
+#[derive(Debug)]
+pub struct KeygenResult {
     pubkey: String,
     address: String,
     out_dir: PathBuf,
 }
 
-async fn do_keygen(config: KeygenConfig) -> Result<KeygenResult> {
+pub async fn do_keygen(config: KeygenConfig) -> Result<KeygenResult> {
     let mut output_file = tokio::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(config.output)
+        .open(&config.output)
         .await
         .context("cannot create output file")?;
 
@@ -57,7 +58,7 @@ async fn do_keygen(config: KeygenConfig) -> Result<KeygenResult> {
         room: "room".into(),
         address: "http://127.0.0.1:8000".parse()?,
         parties: vec![1, 2],
-        local_share: "local_share".into(),
+        local_share: config.output,
         data_to_sign: "boomersig go brrrr".into(),
         transaction: false,
     };
