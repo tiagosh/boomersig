@@ -31,7 +31,7 @@ enum AppMode {
 #[derive(Debug, Default)]
 struct CreateState {
     threshold: u8,
-    quorum: u8,
+    number_of_parties: u8,
     participant_index: u8,
     selected_field: usize,
     cursor_visible: bool,
@@ -171,7 +171,7 @@ impl App {
 
         let fields = [
             ("Threshold", self.create_state.threshold),
-            ("Quorum", self.create_state.quorum),
+            ("Number of Parties", self.create_state.number_of_parties),
             ("Participant Index", self.create_state.participant_index),
         ];
 
@@ -342,7 +342,10 @@ impl App {
             }
             crossterm::event::KeyCode::Left => match self.create_state.selected_field {
                 0 => self.create_state.threshold = self.create_state.threshold.saturating_sub(1),
-                1 => self.create_state.quorum = self.create_state.quorum.saturating_sub(1),
+                1 => {
+                    self.create_state.number_of_parties =
+                        self.create_state.number_of_parties.saturating_sub(1)
+                }
                 2 => {
                     self.create_state.participant_index =
                         self.create_state.participant_index.saturating_sub(1)
@@ -351,7 +354,10 @@ impl App {
             },
             crossterm::event::KeyCode::Right => match self.create_state.selected_field {
                 0 => self.create_state.threshold = self.create_state.threshold.saturating_add(1),
-                1 => self.create_state.quorum = self.create_state.quorum.saturating_add(1),
+                1 => {
+                    self.create_state.number_of_parties =
+                        self.create_state.number_of_parties.saturating_add(1)
+                }
                 2 => {
                     self.create_state.participant_index =
                         self.create_state.participant_index.saturating_add(1)
@@ -363,14 +369,14 @@ impl App {
                     output: format!("local-share{}.json", self.create_state.participant_index)
                         .into(),
                     address: "http://127.0.0.1:8000".parse().unwrap(),
-                    room: "room".into(),
+                    room: "default-keygen".into(),
                     index: self.sign_state.participant_index as u16,
                     threshold: self.create_state.threshold as u16,
-                    number_of_parties: 3,
+                    number_of_parties: self.create_state.number_of_parties as u16,
                 };
 
                 let _rt = tokio::runtime::Runtime::new().unwrap();
-                let ret = block_on(bs_keygen::do_keygen(config)).unwrap();
+                let ret = _rt.block_on(bs_keygen::do_keygen(config)).unwrap();
 
                 std::fs::write("ms.json", format!("{ret:?}")).unwrap();
             }
@@ -388,16 +394,19 @@ impl App {
                 if self.sign_state.selected_field == 1 {
                     let data_to_sign = self.sign_state.psbt.lines().join("\n");
                     let config = SigningConfig {
-                        room: "room".into(),
+                        room: "default-signing".into(),
                         address: "http://127.0.0.1:8000".parse().unwrap(),
                         parties: vec![1, 2],
                         transaction: true,
-                        local_share: format!("local-share{}.json", self.sign_state.participant_index)
-                            .into(),
+                        local_share: format!(
+                            "local-share{}.json",
+                            self.sign_state.participant_index
+                        )
+                        .into(),
                         data_to_sign,
                     };
                     self.sign_state.psbt = TextArea::new(Vec::new());
-                    
+
                     let _rt = tokio::runtime::Runtime::new().unwrap();
                     let ret = _rt.block_on(do_sign(config)).unwrap();
 

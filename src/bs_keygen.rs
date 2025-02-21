@@ -42,7 +42,6 @@ pub async fn do_keygen(config: KeygenConfig) -> Result<KeygenResult> {
     let incoming = incoming.fuse();
     tokio::pin!(incoming);
     tokio::pin!(outgoing);
-
     let keygen = Keygen::new(config.index, config.threshold, config.number_of_parties)?;
     let output = AsyncProtocol::new(keygen, incoming, outgoing)
         .run()
@@ -55,7 +54,7 @@ pub async fn do_keygen(config: KeygenConfig) -> Result<KeygenResult> {
         .context("save output to file")?;
 
     let args = SigningConfig {
-        room: "room".into(),
+        room: "default-signing".into(),
         address: "http://127.0.0.1:8000".parse()?,
         parties: vec![1, 2],
         local_share: config.output,
