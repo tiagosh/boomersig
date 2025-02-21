@@ -370,7 +370,7 @@ impl App {
                         .into(),
                     address: "http://127.0.0.1:8000".parse().unwrap(),
                     room: "default-keygen".into(),
-                    index: self.sign_state.participant_index as u16,
+                    index: self.create_state.participant_index as u16,
                     threshold: self.create_state.threshold as u16,
                     number_of_parties: self.create_state.number_of_parties as u16,
                 };
