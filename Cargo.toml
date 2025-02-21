@@ -5,7 +5,7 @@ edition = "2018"
 
 [[bin]]
 name = "bs_server"
-path = "src/bs_server.rs"
+path = "bin/bs_server.rs"
 
 
 [[bin]]
@@ -18,7 +18,12 @@ name = "bs_keygen"
 path = "src/bs_keygen.rs"
 
 [dependencies]
+color-eyre = "0.6.3"
+crossterm = "0.28.1"
+ratatui = "0.29.0"
+tui-textarea = "0.7.0"
 criterion = "0.3"
+
 aes-gcm = "0.9.4"
 hex = "0.4"
 tokio = { version = "1", default-features = false, features = ["macros"] }
@@ -35,9 +40,17 @@ structopt = "0.3"
 openssl = "0.10"
 rs-secp256k1 = "0.5.7"
 bitcoin =  { version = "0.30.2", features = ["base64"] }
-
+multi-party-ecdsa = { git = "https://github.com/ZenGo-X/multi-party-ecdsa.git", branch = "master" }
+subtle = { version = "2" }
+zeroize = "1"
+curv-kzen = { version = "0.9", default-features = false }
+centipede = { version = "0.3", default-features = false }
+zk-paillier = { version = "0.4.3", default-features = false }
+round-based = { version = "0.1.4", features = [] }
+derivative = "2"
+sha2 = "0.9"
 thiserror = "1.0.23"
-round-based = { version = "0.1.4", features = ["dev"] }
+serde = "1.0.218"
 
 [dependencies.paillier]
 version = "0.4.2"

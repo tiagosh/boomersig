@@ -22,8 +22,8 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::sig
 use round_based::async_runtime::AsyncProtocol;
 use round_based::Msg;
 
-mod gg20_sm_client;
-use gg20_sm_client::join_computation;
+mod bs_client;
+use bs_client::join_computation;
 
 use openssl::bn::BigNum;
 
