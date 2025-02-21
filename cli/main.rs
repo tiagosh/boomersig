@@ -96,7 +96,7 @@ impl App {
 
     fn render_menu(&mut self, frame: &mut Frame) {
         let main_block = Block::bordered()
-            .title(" BoomerSig ".bold())
+            .title(" BoomerSig (Main Menu)".bold())
             .border_set(border::THICK);
 
         let chunks = Layout::default()
@@ -149,7 +149,7 @@ impl App {
 
     fn render_create(&mut self, frame: &mut Frame) {
         let main_block = Block::bordered()
-            .title(" BoomerSig Create ".bold())
+            .title(" BoomerSig (Create Multisig) ".bold())
             .border_set(border::THICK);
 
         let chunks = Layout::default()
@@ -211,7 +211,7 @@ impl App {
 
     fn render_sign(&mut self, frame: &mut Frame) {
         let main_block = Block::bordered()
-            .title(" BoomerSig Sign ".bold())
+            .title(" BoomerSig (Sign Multisig)".bold())
             .border_set(border::THICK);
 
         let chunks = Layout::default()
