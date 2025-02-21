@@ -1,0 +1,50 @@
+[package]
+name = "boomersig"
+version = "0.0.1"
+edition = "2018"
+
+[[bin]]
+name = "bs_server"
+path = "src/bs_server.rs"
+
+
+[[bin]]
+name = "bs_signing"
+path = "src/bs_signing.rs"
+
+
+[[bin]]
+name = "bs_keygen"
+path = "src/bs_keygen.rs"
+
+[dependencies]
+criterion = "0.3"
+aes-gcm = "0.9.4"
+hex = "0.4"
+tokio = { version = "1", default-features = false, features = ["macros"] }
+futures = "0.3"
+rocket = { version = "0.5.0-rc.1", default-features = false, features = ["json"] }
+reqwest = { version = "0.9", default-features = false }
+uuid = { version = "0.8", features = ["v4"] }
+serde_json = "1.0"
+rand = "0.8"
+surf = "2"
+async-sse = "5"
+anyhow = "1"
+structopt = "0.3"
+openssl = "0.10"
+rs-secp256k1 = "0.5.7"
+bitcoin =  { version = "0.30.2", features = ["base64"] }
+
+thiserror = "1.0.23"
+round-based = { version = "0.1.4", features = ["dev"] }
+
+[dependencies.paillier]
+version = "0.4.2"
+package = "kzen-paillier"
+default-features = false
+
+[dependencies.class_group]
+version = "0.6"
+default-features = false
+optional = true
