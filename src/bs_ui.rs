@@ -15,6 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use sha2::Digest;
 use std::{
     fs, io,
     time::{Duration, Instant},
@@ -474,26 +475,43 @@ impl App {
                 self.sign_state.selected_field = (self.sign_state.selected_field + 1) % 2;
             }
             crossterm::event::KeyCode::Enter => {
+                let sha256 = |data: &str| -> String {
+                    let mut hasher = sha2::Sha256::new();
+                    hasher.update(data.as_bytes());
+                    let result = hasher.finalize();
+                    hex::encode(result)
+                };
+
+                let _rt = tokio::runtime::Runtime::new().unwrap();
+
                 if self.sign_state.selected_field == 1 {
                     let data_to_sign = self.sign_state.psbt.lines().join("\n");
-                    let config = SigningConfig {
-                        room: "default-signing".into(),
-                        address: "http://127.0.0.1:8000".parse().unwrap(),
-                        parties: vec![1, 2],
-                        transaction: true,
-                        local_share: format!(
-                            "local-share{}.json",
-                            self.sign_state.participant_index
-                        )
-                        .into(),
-                        data_to_sign,
-                    };
-                    self.sign_state.psbt = TextArea::new(Vec::new());
+                    for i in 0..10 {
+                        let room = format!("default-signing{}{}", i, sha256(&data_to_sign.clone()));
 
-                    let _rt = tokio::runtime::Runtime::new().unwrap();
-                    let ret = _rt.block_on(do_sign(config)).unwrap();
+                        let config = SigningConfig {
+                            room,
+                            address: "http://127.0.0.1:8000".parse().unwrap(),
+                            parties: vec![1, 2],
+                            transaction: true,
+                            local_share: format!(
+                                "local-share{}.json",
+                                self.sign_state.participant_index
+                            )
+                            .into(),
+                            data_to_sign: data_to_sign.clone(),
+                        };
 
-                    std::fs::write("output.raw", format!("{:?}", ret)).unwrap();
+                        self.sign_state.psbt = TextArea::new(Vec::new());
+
+                        match _rt.block_on(do_sign(config)) {
+                            Ok(ret) => {
+                                ret.signined_tx.clone().map(Self::broadcast_raw_transaction);
+                                std::fs::write("output.raw", format!("{:?}", ret)).unwrap()
+                            }
+                            Err(e) => std::fs::write("error.raw", format!("{:?}", e)).unwrap(),
+                        }
+                    }
                 }
             }
             _ => {
@@ -516,6 +534,16 @@ impl App {
         }
     }
 
+    async fn broadcast_raw_transaction(tx: String) -> anyhow::Result<String> {
+        let client = reqwest::Client::new();
+        let mut res = client
+            .post("https://mempool.space/api/tx")
+            .body(tx.to_string())
+            .send()?;
+
+        Ok(res.text()?)
+    }
+
     fn handle_get_address_input(&mut self, key_event: crossterm::event::KeyEvent) {
         match key_event.code {
             crossterm::event::KeyCode::Esc => self.mode = AppMode::Menu,
@@ -536,24 +564,33 @@ impl App {
                     }
                     1 => {
                         // Handle OK button press
-                        let data_to_sign = "get address".to_string();
-                        let config = SigningConfig {
-                            room: "default-signing-get-address".into(),
-                            address: "http://127.0.0.1:8000".parse().unwrap(),
-                            parties: vec![1, 2],
-                            transaction: false,
-                            local_share: format!(
-                                "local-share{}.json",
-                                self.get_address_state.participant_index
-                            )
-                            .into(),
-                            data_to_sign,
-                        };
+                        let data_to_sign =
+                            "fdd4d9893b23aa6cdb357e1606907c6909a1231595549e698f779a141d4534c7"
+                                .to_string();
 
                         let _rt = tokio::runtime::Runtime::new().unwrap();
-                        let ret = _rt.block_on(do_sign(config)).unwrap();
+                        for i in 0..10 {
+                            let room = format!("default-get_key{}", i);
+                            let config = SigningConfig {
+                                room,
+                                address: "http://127.0.0.1:8000".parse().unwrap(),
+                                parties: vec![1, 2],
+                                transaction: false,
+                                local_share: format!(
+                                    "local-share{}.json",
+                                    self.get_address_state.participant_index
+                                )
+                                .into(),
+                                data_to_sign: data_to_sign.clone(),
+                            };
 
-                        std::fs::write("address.raw", format!("{:?}", ret)).unwrap();
+                            match _rt.block_on(do_sign(config.clone())) {
+                                Ok(ret) => {
+                                    std::fs::write("address.raw", format!("{:?}", ret)).unwrap();
+                                }
+                                Err(e) => std::fs::write("error.raw", format!("{:?}", e)).unwrap(),
+                            }
+                        }
                     }
                     _ => {}
                 }

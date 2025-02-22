@@ -1,4 +1,5 @@
 use std::collections::hash_map::{Entry, HashMap};
+use std::fmt::Debug;
 use std::sync::{
     atomic::{AtomicU16, Ordering},
     Arc,
@@ -21,6 +22,7 @@ async fn subscribe(
     last_seen_msg: LastEventId,
     room_id: &str,
 ) -> EventStream<impl Stream<Item = Event>> {
+    println!("{room_id}");
     let room = db.get_room_or_create_empty(room_id).await;
     let mut subscription = room.subscribe(last_seen_msg.0);
     EventStream::from(stream! {
@@ -40,11 +42,13 @@ async fn subscribe(
 async fn issue_idx(db: &State<Db>, room_id: &str) -> Json<IssuedUniqueIdx> {
     let room = db.get_room_or_create_empty(room_id).await;
     let idx = room.issue_unique_idx();
+    println!("issued id {idx}");
     Json::from(IssuedUniqueIdx { unique_idx: idx })
 }
 
 #[rocket::post("/rooms/<room_id>/broadcast", data = "<message>")]
 async fn broadcast(db: &State<Db>, room_id: &str, message: String) -> Status {
+    println!("broadcasted {message} into {room_id}");
     let room = db.get_room_or_create_empty(room_id).await;
     room.publish(message).await;
     Status::Ok
@@ -54,6 +58,7 @@ struct Db {
     rooms: RwLock<HashMap<String, Arc<Room>>>,
 }
 
+#[derive(Debug)]
 struct Room {
     messages: RwLock<Vec<String>>,
     message_appeared: Notify,
@@ -102,12 +107,14 @@ impl Room {
     }
 
     pub async fn publish(self: &Arc<Self>, message: String) {
+        println!("{message}");
         let mut messages = self.messages.write().await;
         messages.push(message);
         self.message_appeared.notify_waiters();
     }
 
     pub fn subscribe(self: Arc<Self>, last_seen_msg: Option<u16>) -> Subscription {
+        println!("subscribing {}", self.subscribers.load(Ordering::SeqCst));
         self.subscribers.fetch_add(1, Ordering::SeqCst);
         Subscription {
             room: self,
@@ -116,6 +123,7 @@ impl Room {
     }
 
     pub fn is_abandoned(&self) -> bool {
+        println!("abandoned {}", self.subscribers.load(Ordering::SeqCst));
         self.subscribers.load(Ordering::SeqCst) == 0
     }
 
@@ -152,6 +160,7 @@ impl Drop for Subscription {
 }
 
 /// Represents a header Last-Event-ID
+#[derive(Debug)]
 struct LastEventId(Option<u16>);
 
 #[rocket::async_trait]
@@ -182,7 +191,7 @@ struct IssuedUniqueIdx {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let figment = rocket::Config::figment().merge((
         "limits",
-        rocket::data::Limits::new().limit("string", 100.megabytes()),
+        rocket::data::Limits::new().limit("string", 100.gigabytes()),
     ));
     rocket::custom(figment)
         .mount("/", rocket::routes![subscribe, issue_idx, broadcast])
