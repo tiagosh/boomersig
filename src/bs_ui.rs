@@ -1,4 +1,4 @@
-use bs_keygen::KeygenConfig;
+use bs_keygen::{do_keygen, KeygenConfig};
 use bs_signing::{do_sign, SigningConfig};
 use crossterm::event::{self, Event};
 mod bs_client;
@@ -20,6 +20,7 @@ use std::{
     fs, io,
     time::{Duration, Instant},
 };
+use tokio::time::timeout;
 use tui_textarea::TextArea;
 
 #[derive(Debug, PartialEq)]
@@ -460,7 +461,8 @@ impl App {
                 };
 
                 let _rt = tokio::runtime::Runtime::new().unwrap();
-                let ret = _rt.block_on(bs_keygen::do_keygen(config)).unwrap();
+                let ret = _rt
+                    .block_on(async { timeout(Duration::from_secs(30), do_keygen(config)).await });
 
                 std::fs::write("ms.json", format!("{ret:?}")).unwrap();
             }
@@ -500,15 +502,20 @@ impl App {
                             )
                             .into(),
                             data_to_sign: data_to_sign.clone(),
+                            idx: self.sign_state.participant_index as u16,
                         };
 
                         self.sign_state.psbt = TextArea::new(Vec::new());
 
-                        match _rt.block_on(do_sign(config)) {
-                            Ok(ret) => {
+                        match _rt.block_on(async {
+                            timeout(Duration::from_secs(30), do_sign(config)).await
+                        }) {
+                            Ok(Ok(ret)) => {
                                 ret.signined_tx.clone().map(Self::broadcast_raw_transaction);
-                                std::fs::write("output.raw", format!("{:?}", ret)).unwrap()
+                                std::fs::write("output.raw", format!("{:?}", ret));
+                                break;
                             }
+                            Ok(Err(e)) => std::fs::write("error.raw", format!("{:?}", e)).unwrap(),
                             Err(e) => std::fs::write("error.raw", format!("{:?}", e)).unwrap(),
                         }
                     }
@@ -582,11 +589,18 @@ impl App {
                                 )
                                 .into(),
                                 data_to_sign: data_to_sign.clone(),
+                                idx: self.get_address_state.participant_index as u16,
                             };
 
-                            match _rt.block_on(do_sign(config.clone())) {
-                                Ok(ret) => {
+                            match _rt.block_on(async {
+                                timeout(Duration::from_secs(30), do_sign(config.clone())).await
+                            }) {
+                                Ok(Ok(ret)) => {
                                     std::fs::write("address.raw", format!("{:?}", ret)).unwrap();
+                                    break;
+                                }
+                                Ok(Err(e)) => {
+                                    std::fs::write("error.raw", format!("{:?}", e)).unwrap()
                                 }
                                 Err(e) => std::fs::write("error.raw", format!("{:?}", e)).unwrap(),
                             }

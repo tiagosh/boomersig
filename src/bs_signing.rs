@@ -39,6 +39,7 @@ pub struct SigningConfig {
     pub parties: Vec<u16>,
     pub data_to_sign: String,
     pub transaction: bool,
+    pub idx: u16,
 }
 
 #[derive(Debug)]
@@ -66,7 +67,7 @@ pub async fn do_sign(args: SigningConfig) -> Result<SigningResult> {
     tokio::pin!(incoming);
     tokio::pin!(outgoing);
 
-    let signing = OfflineStage::new(i, args.parties, local_share)
+    let signing = OfflineStage::new(args.idx, args.parties, local_share)
         .context(format!("error creatign offline stage {i}"))?;
     let completed_offline_stage = AsyncProtocol::new(signing, incoming, outgoing)
         .run()
