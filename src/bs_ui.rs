@@ -51,6 +51,7 @@ struct SignState {
 struct GetAddressState {
     participant_index: u8,
     selected_field: usize,
+    address: Option<String>,
 }
 
 #[derive(Debug)]
@@ -122,7 +123,7 @@ impl App {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
-                Constraint::Length(3),
+                Constraint::Length(5), // Increased space for menu items
                 Constraint::Min(3),
             ])
             .split(main_block.inner(frame.area()));
@@ -143,7 +144,7 @@ impl App {
 
         frame.render_widget(
             Paragraph::new(text)
-                .block(Block::default().title("Main Menu"))
+                .block(Block::default().title(""))
                 .centered(),
             chunks[1],
         );
@@ -314,13 +315,14 @@ impl App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Participant Index
-                Constraint::Length(3), // OK Button
-                Constraint::Min(3),    // Instructions
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(1), // Address display area
+                Constraint::Length(3),
             ])
             .split(main_block.inner(frame.area()));
 
-        // Render Participant Index Field
+        // Participant Index Field
         let is_participant_selected = self.get_address_state.selected_field == 0;
         let mut participant_text = self.get_address_state.participant_index.to_string();
         if is_participant_selected && self.create_state.cursor_visible {
@@ -344,7 +346,7 @@ impl App {
             chunks[0],
         );
 
-        // Render OK Button
+        // OK Button
         let is_ok_button_selected = self.get_address_state.selected_field == 1;
         let ok_button = Paragraph::new("OK")
             .block(Block::default().borders(Borders::ALL))
@@ -356,7 +358,22 @@ impl App {
 
         frame.render_widget(ok_button, chunks[1]);
 
-        // Render Instructions
+        // Address Display
+        if let Some(addr) = &self.get_address_state.address {
+            let address_block = Block::default()
+                .borders(Borders::ALL)
+                .title("Generated Address")
+                .style(Style::default().fg(Color::Green));
+
+            frame.render_widget(
+                Paragraph::new(addr.clone())
+                    .block(address_block)
+                    .style(Style::default().bold()),
+                chunks[2],
+            );
+        }
+
+        // Instructions
         let instructions = Line::from(vec![
             " Navigate ".into(),
             "▲/▼".blue().bold(),
@@ -371,7 +388,7 @@ impl App {
             Paragraph::new(Text::from(instructions))
                 .block(Block::default())
                 .centered(),
-            chunks[2],
+            chunks[3],
         );
 
         frame.render_widget(main_block, frame.area());
@@ -597,6 +614,7 @@ impl App {
                             }) {
                                 Ok(Ok(ret)) => {
                                     std::fs::write("address.raw", format!("{:?}", ret)).unwrap();
+                                    self.get_address_state.address = Some(ret.address);
                                     break;
                                 }
                                 Ok(Err(e)) => {
