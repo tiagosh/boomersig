@@ -1,8 +1,10 @@
+use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::Ok;
 use anyhow::{anyhow, Context, Result};
 use bitcoin::consensus::encode::{deserialize, serialize_hex};
+use bitcoin::hashes::sha256;
 use bitcoin::psbt::PartiallySignedTransaction;
 use bitcoin::script::PushBytesBuf;
 use bitcoin::sighash;
@@ -10,6 +12,7 @@ use bitcoin::ScriptBuf;
 use bitcoin::Transaction;
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use hex::FromHex;
+use sha2::Digest;
 use std::str::FromStr;
 use structopt::StructOpt;
 
@@ -83,7 +86,11 @@ pub async fn do_sign(args: SigningConfig) -> Result<SigningResult> {
             let sighash_ecdsa = tx.sighash_ecdsa(0, &mut sighash_cache).unwrap();
             hex::decode(sighash_ecdsa.0.to_string()).unwrap()
         }
-        false => args.data_to_sign.as_bytes().to_vec(),
+        false => {
+            let mut a = sha2::Sha256::default();
+            a.write(&args.data_to_sign.as_bytes()).unwrap();
+            a.finalize().to_vec()
+        }
     };
 
     let (signing, partial_signature) =

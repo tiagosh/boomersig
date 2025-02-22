@@ -9,7 +9,7 @@ use futures::executor::block_on;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     prelude::Widget,
-    style::{Style, Stylize},
+    style::{Color, Style, Stylize},
     symbols::border,
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph},
@@ -312,12 +312,13 @@ impl App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
-                Constraint::Min(3),
-                Constraint::Length(3),
+                Constraint::Length(3), // Participant Index
+                Constraint::Length(3), // OK Button
+                Constraint::Min(3),    // Instructions
             ])
             .split(main_block.inner(frame.area()));
 
+        // Render Participant Index Field
         let is_participant_selected = self.get_address_state.selected_field == 0;
         let mut participant_text = self.get_address_state.participant_index.to_string();
         if is_participant_selected && self.create_state.cursor_visible {
@@ -341,10 +342,23 @@ impl App {
             chunks[0],
         );
 
+        // Render OK Button
+        let is_ok_button_selected = self.get_address_state.selected_field == 1;
+        let ok_button = Paragraph::new("OK")
+            .block(Block::default().borders(Borders::ALL))
+            .style(if is_ok_button_selected {
+                Style::default().bg(Color::Blue).fg(Color::White)
+            } else {
+                Style::default()
+            });
+
+        frame.render_widget(ok_button, chunks[1]);
+
+        // Render Instructions
         let instructions = Line::from(vec![
             " Navigate ".into(),
             "▲/▼".blue().bold(),
-            " Edit ".into(),
+            " Select ".into(),
             "Enter".blue().bold(),
             " Back ".into(),
             "Esc".blue().bold(),
@@ -382,13 +396,14 @@ impl App {
                     self.create_state.selected_field.saturating_sub(1);
             }
             crossterm::event::KeyCode::Down => {
-                if self.create_state.selected_field < 1 {
+                if self.create_state.selected_field < 2 {
                     self.create_state.selected_field += 1;
                 }
             }
             crossterm::event::KeyCode::Enter => match self.create_state.selected_field {
                 0 => self.mode = AppMode::Create,
                 1 => self.mode = AppMode::Sign,
+                2 => self.mode = AppMode::GetAddress,
                 _ => {}
             },
             _ => {}
@@ -504,30 +519,43 @@ impl App {
     fn handle_get_address_input(&mut self, key_event: crossterm::event::KeyEvent) {
         match key_event.code {
             crossterm::event::KeyCode::Esc => self.mode = AppMode::Menu,
-            crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Down => {
-                self.get_address_state.selected_field =
-                    (self.get_address_state.selected_field + 1) % 2;
+            crossterm::event::KeyCode::Up => {
+                if self.get_address_state.selected_field > 0 {
+                    self.get_address_state.selected_field -= 1;
+                }
+            }
+            crossterm::event::KeyCode::Down => {
+                if self.get_address_state.selected_field < 1 {
+                    self.get_address_state.selected_field += 1;
+                }
             }
             crossterm::event::KeyCode::Enter => {
-                if self.get_address_state.selected_field == 1 {
-                    let data_to_sign = "get address".to_string();
-                    let config = SigningConfig {
-                        room: "default-signing".into(),
-                        address: "http://127.0.0.1:8000".parse().unwrap(),
-                        parties: vec![1, 2],
-                        transaction: false,
-                        local_share: format!(
-                            "local-share{}.json",
-                            self.get_address_state.participant_index
-                        )
-                        .into(),
-                        data_to_sign,
-                    };
+                match self.get_address_state.selected_field {
+                    0 => {
+                        // Handle Participant Index input (if needed)
+                    }
+                    1 => {
+                        // Handle OK button press
+                        let data_to_sign = "get address".to_string();
+                        let config = SigningConfig {
+                            room: "default-signing-get-address".into(),
+                            address: "http://127.0.0.1:8000".parse().unwrap(),
+                            parties: vec![1, 2],
+                            transaction: false,
+                            local_share: format!(
+                                "local-share{}.json",
+                                self.get_address_state.participant_index
+                            )
+                            .into(),
+                            data_to_sign,
+                        };
 
-                    let _rt = tokio::runtime::Runtime::new().unwrap();
-                    let ret = _rt.block_on(do_sign(config)).unwrap();
+                        let _rt = tokio::runtime::Runtime::new().unwrap();
+                        let ret = _rt.block_on(do_sign(config)).unwrap();
 
-                    std::fs::write("address.raw", format!("{:?}", ret)).unwrap();
+                        std::fs::write("address.raw", format!("{:?}", ret)).unwrap();
+                    }
+                    _ => {}
                 }
             }
             _ => {
@@ -543,8 +571,6 @@ impl App {
                         }
                         _ => {}
                     }
-                } else {
-                    //self.get_address_state.psbt.input(key_event);
                 }
             }
         }
