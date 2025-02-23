@@ -4,7 +4,6 @@ use crossterm::event::{self, Event};
 mod bs_client;
 mod bs_keygen;
 mod bs_signing;
-
 use futures::executor::block_on;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -16,6 +15,8 @@ use ratatui::{
     Frame,
 };
 use sha2::Digest;
+use std::sync::Arc;
+use std::thread;
 use std::{
     fs, io,
     time::{Duration, Instant},
@@ -675,4 +676,42 @@ fn main() -> io::Result<()> {
         crossterm::event::DisableMouseCapture
     )?;
     Ok(())
+}
+
+// assure that our app, in different ways, runs in a safe way. Warn user when some are
+// permissible and anothers that are safe.
+//
+// avoid open a space to an undefined behaviour on our app. There are a number ways an app can
+//
+// break. We dont't wanna it on multisig, speccially the boomer, our beloved client.
+//
+// So it could be interesting to define some situations that a unsafe session could not exist,
+// permissible -- warning user when this happen and running at your own risk (experimental) --
+// and safe (audition from more contributors).
+//
+// You must run a server first.
+//
+// TODO: Hack a untested concept and add a comment about future tests for experimental features.
+//
+// TEST: [
+//   cargo test --tests safe,
+//   cargo test --tests permissible,
+//   cargo test --tests experimental -- --ignored
+// ]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    #[test]
+    fn test_hello_world() -> io::Result<()> {
+        // Initialize app with test-friendly backend
+        let backend = TestBackend::new(100, 30); // Width=100, Height=30
+        let mut terminal = Terminal::new(backend)?;
+        let mut app = App::default();
+
+        // Test initial render
+        terminal.draw(|frame| app.draw(frame))?;
+        Ok(())
+    }
 }
