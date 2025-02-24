@@ -682,7 +682,6 @@ fn main() -> io::Result<()> {
 // permissible and anothers that are safe.
 //
 // avoid open a space to an undefined behaviour on our app. There are a number ways an app can
-//
 // break. We dont't wanna it on multisig, speccially the boomer, our beloved client.
 //
 // So it could be interesting to define some situations that a unsafe session could not exist,
